@@ -107,7 +107,7 @@
  * 
  */
 
-#define ENTRYMODE ENTRY_EXT_RESET
+#define ENTRYMODE ENTRY_ALWAYS
 
 #define JUMPER_PIN    PB0
 #define JUMPER_PORT   PORTB 
@@ -162,7 +162,7 @@
  */
 
 #define AUTO_EXIT_NO_USB_MS    0
-#define AUTO_EXIT_MS           0
+#define AUTO_EXIT_MS           1000
 
  /*
  *  Defines the setting of the RC-oscillator calibration after quitting the bootloader. (OSCCAL)
