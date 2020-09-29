@@ -7,34 +7,40 @@
 #define PIXELS 2
 
 // global luminance value
-#define L 0.01
+volatile float luminance = 0.1;
+
+enum pixelState {
+  OFF,
+  SOLID,
+  RAINBOW,
+};
+static enum pixelState state = RAINBOW;
 
 // neopixels with onewire interface
 #define PIN_DATA 4
 NeoPixelBus<NeoGrbwFeature, Neo800KbpsMethod> strip(PIXELS, PIN_DATA);
 
 // define a few useful solid colors
-HsbColor WHITE  (         0, 0, L);
-HsbColor OFF    (         0, 0, 0);
-HsbColor RED    (   0.0/360, 1, L);
-HsbColor YELLOW (  60.0/360, 1, L);
-HsbColor GREEN  ( 120.0/360, 1, L);
-HsbColor CYAN   ( 180.0/360, 1, L);
-HsbColor BLUE   ( 240.0/360, 1, L);
-HsbColor PINK   ( 300.0/360, 1, L);
+#define WHITE(L)  HsbColor (         0, 0, L)
+#define OFF(L)    HsbColor (         0, 0, 0)
+#define RED(L)    HsbColor (   0.0/360, 1, L)
+#define YELLOW(L) HsbColor (  60.0/360, 1, L)
+#define GREEN(L)  HsbColor ( 120.0/360, 1, L)
+#define CYAN(L)   HsbColor ( 180.0/360, 1, L)
+#define BLUE(L)   HsbColor ( 240.0/360, 1, L)
+#define PINK(L)   HsbColor ( 300.0/360, 1, L)
 
 // fill the strip with a rainbow section
 void rainbowfill(float hue, float angle) {
   float increment = angle / PIXELS;
   for (int i = 0; i < PIXELS; i++) {
-    strip.SetPixelColor(i, HsbColor( hue + increment*i, 1, L ));
+    strip.SetPixelColor(i, HsbColor( hue + increment*i, 1, luminance ));
   }
-  strip.Show();
 }
 
 // fading rainbow animation
 void rainbowfade(float angle, float add) {
-  static float hue = 0.0;
+  static float hue = random(1024) / 1024.0;
   rainbowfill(hue, angle);
   hue += add;
   if (hue >= 1.0) {
@@ -50,39 +56,46 @@ volatile void updateSolid(HsbColor color) {
 
 // ---------- v-usb interface ---------
 
-// a couple of control messages
-#define USB_LED_OFF     0
-#define USB_LED_ON      1
-#define USB_HELLOWORLD  2
-#define CTL_HUE         3
-
-static uchar helloWorld[14] = "Hello, World!";
+// control message types
+enum usbCtlType {
+  LED_OFF = 0,
+  LED_ON,
+  SET_HUE,
+  SET_LUMINANCE
+};
 
 // react to custom control messages
 usbMsgLen_t usbFunctionSetup(uchar data[8]) {
   usbRequest_t *rq = (void *)data;
-  static uchar dataBuffer[4];
 
-  switch (rq->bRequest) {
+  switch ((usbCtlType)rq->bRequest) {
     
-    case USB_LED_OFF:
-      updateSolid(BLUE);
+    case LED_OFF: {
+      state = OFF;
+      strip.ClearTo(OFF(0));
+      strip.Show();
       return 0;
-    
-    case USB_LED_ON:
-      updateSolid(RED);
-      return 0;
-    
-    case USB_HELLOWORLD:
-      usbMsgPtr = helloWorld;
-      return sizeof(helloWorld);
+    }
 
-    case CTL_HUE:
+    case LED_ON: {
+      state = RAINBOW;
+      return 0;
+    }
+
+    case SET_HUE: {
+      state = SOLID;
       RgbwColor c = RgbwColor(rq->wValue.bytes[0], rq->wValue.bytes[1], rq->wIndex.bytes[0], rq->wIndex.bytes[1]);
-      for (unsigned i = 0; i < PIXELS; i++) {
+      for (int i = 0; i < PIXELS; i++) {
         strip.SetPixelColor(i, c);
       }
       return 0;
+    }
+
+    case SET_LUMINANCE: {
+      float l = rq->wValue.word;
+      luminance = (l / 0xffff);
+      return 0;
+    }
 
   }
   return 0;
@@ -93,13 +106,17 @@ usbMsgLen_t usbFunctionSetup(uchar data[8]) {
 
 void setup() {
 
+  // random seed
+  // THIS IS NOT CRYPTOGRAPHICALLY SECURE
+  randomSeed(analogRead(1));
+
   // enable second pixel ground
   pinMode(3, OUTPUT);
   digitalWrite(3, LOW);
-  
+
   // reset strip to off state
   strip.Begin();
-  strip.ClearTo(GREEN);
+  strip.ClearTo(OFF(0));
   strip.Show();
 
   // initialize usb
@@ -113,8 +130,15 @@ void setup() {
 
 void loop() {
   usbPoll();
-  strip.Show();
+
+  // rainbowfader
+  static unsigned long last = 0;
+  if (millis() - last > 10) {
+    if (state == RAINBOW)
+      rainbowfade(0.1, 0.5/360);
+    last = millis();
+  }
+  if (state != OFF)
+    strip.Show();
     
-  //rainbowfade( 120.0/360, 0.5/360);
-  //delay(10);
 }

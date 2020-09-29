@@ -11,8 +11,8 @@ import (
 
 const LED_OFF = 0
 const LED_ON = 1
-const LED_HELLO = 2
-const LED_HUE = 3
+const LED_HUE = 2
+const LED_LUMINANCE = 3
 
 const CTL_RETRIES = 3
 
@@ -34,6 +34,7 @@ var hue_red = flag.Int("r", 0, "hue: red")
 var hue_green = flag.Int("g", 0, "hue: green")
 var hue_blue = flag.Int("b", 0, "hue: blue")
 var hue_white = flag.Int("w", 0, "hue: white")
+var luminance = flag.Float64("l", -1, "set luminance")
 
 func main() {
 
@@ -55,6 +56,10 @@ func main() {
 		_, err = control(dev, LED_OFF, 0, 0, nil)
 	} else if *sethue {
 		_, err = control(dev, LED_HUE, uint16(*hue_red|(*hue_green<<8)), uint16(*hue_blue|(*hue_white<<8)), nil)
+	} else if *luminance != -1 {
+		lum := uint16(*luminance * 0xffff)
+		log.Printf("set luminance: %f * 0xffff = %d", *luminance, lum)
+		_, err = control(dev, LED_LUMINANCE, lum, 0, nil)
 	} else {
 		err = fmt.Errorf("no action given")
 	}
